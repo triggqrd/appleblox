@@ -154,7 +154,7 @@
 </script>
 
 <Card.Root
-	class="h-[96.5%] bg-card w-48 fixed top-0 left-0 overflow-x-hidden select-none flex flex-col my-3 ml-4 border-border/50 hover:bg-muted/30"
+	class="h-[96.5%] bg-card w-48 fixed top-0 left-0 overflow-x-hidden select-none flex flex-col my-3 ml-4 border-border/50"
 	{id}
 >
 	<div class="flex flex-col">
