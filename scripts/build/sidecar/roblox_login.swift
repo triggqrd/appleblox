@@ -44,35 +44,40 @@ func storeInKeychain(_ cookie: String) -> Bool {
     return status == errSecSuccess
 }
 
-// MARK: - Process Monitor (reused from transparent_viewer.swift)
+// MARK: - Process Monitor (runs entirely off the main thread)
 
 class ProcessMonitor {
     private var parentPID: pid_t
-    private var timer: Timer?
+    private var monitorQueue = DispatchQueue(label: "ch.origaming.appleblox.processmonitor", qos: .utility)
+    private var timer: DispatchSourceTimer?
 
     init(parentPID: pid_t) {
         self.parentPID = parentPID
     }
 
     func startMonitoring() {
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            self.checkProcesses()
+        let source = DispatchSource.makeTimerSource(queue: monitorQueue)
+        source.schedule(deadline: .now() + 2.0, repeating: 2.0)
+        source.setEventHandler { [weak self] in
+            self?.checkProcesses()
         }
+        source.resume()
+        timer = source
     }
 
     func stopMonitoring() {
-        timer?.invalidate()
+        timer?.cancel()
         timer = nil
     }
 
     private func checkProcesses() {
         if kill(parentPID, 0) != 0 {
-            exitWithStatus("LOGIN_CANCELLED")
+            DispatchQueue.main.async { exitWithStatus("LOGIN_CANCELLED") }
             return
         }
 
         if !isTargetProcessRunning() {
-            exitWithStatus("LOGIN_CANCELLED")
+            DispatchQueue.main.async { exitWithStatus("LOGIN_CANCELLED") }
         }
     }
 
@@ -83,12 +88,15 @@ class ProcessMonitor {
         task.launchPath = "/bin/ps"
         task.arguments = ["-axo", "comm"]
         task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
 
         do {
             try task.run()
+
+            // Read pipe data BEFORE waitUntilExit to avoid pipe buffer deadlock
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             task.waitUntilExit()
 
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8) {
                 let processes = output.components(separatedBy: .newlines)
                 return processes.contains { process in
@@ -251,8 +259,16 @@ class LoginAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             }
         }
 
-        // Appear in dock while login is active
+        // Appear in dock while login is active, using the AppleBlox icon
         NSApp.setActivationPolicy(.regular)
+        let iconURL = URL(fileURLWithPath: CommandLine.arguments[0])
+            .resolvingSymlinksInPath()
+            .deletingLastPathComponent()  // lib/
+            .deletingLastPathComponent()  // Resources/
+            .appendingPathComponent("icon.icns")
+        if let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
     }
 
     // MARK: - Cookie Polling
@@ -260,12 +276,10 @@ class LoginAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     private func checkForCookie() {
         guard !hasCompleted else { return }
 
-        // Dispatch to background queue to prevent main thread blocking
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // WKWebView and its data store must be accessed on the main thread.
+        // getAllCookies is async and lightweight — it won't block the run loop.
+        webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
             guard let self = self, !self.hasCompleted else { return }
-
-            self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
-                guard let self = self, !self.hasCompleted else { return }
 
             for cookie in cookies {
                 if cookie.name == ".ROBLOSECURITY"
@@ -290,7 +304,6 @@ class LoginAppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
                     }
                     return
                 }
-            }
             }
         }
     }

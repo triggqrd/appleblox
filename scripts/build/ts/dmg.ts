@@ -1,70 +1,37 @@
 import BuildConfig from '@root/build.config';
 import child_process from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Signale } from 'signale';
 import { version } from '../../../package.json';
 import { filterArchitectures, getArchitectureFilter } from './utils';
 
-interface DmgOptions {
-	sourceFolder: string;
-	outputName: string;
-	volumeName?: string;
-	backgroundPath?: string;
-	windowPos?: string;
-	windowSize?: string;
-	textSize?: number;
-	iconSize?: number;
-	iconPos?: string;
-	appDropLink?: string;
-}
-
-async function createCustomDMG(options: DmgOptions) {
-	const guidePath = resolve(join('scripts/build/assets', 'Install Guide.rtf'));
-	const {
-		sourceFolder,
-		outputName,
-		volumeName,
-		backgroundPath,
-		windowPos,
-		windowSize,
-		textSize,
-		iconSize,
-		iconPos,
-		appDropLink,
-	} = options;
-
-	// Prepare command arguments
+async function createDMG(sourceFolder: string, outputName: string, volumeName: string, backgroundPath: string) {
 	const args = [
 		'create-dmg',
-		`--volname "${volumeName || outputName}"`,
-		backgroundPath ? `--background "${backgroundPath}"` : '',
-		`--window-pos ${windowPos || '200 120'}`,
-		`--window-size ${windowSize || '800 400'}`,
-		`--text-size ${textSize || 12}`,
-		`--icon-size ${iconSize || 100}`,
-		iconPos ? `--icon "${BuildConfig.appName}.app" ${iconPos}` : '',
-		existsSync(guidePath) ? `--add-file "Install Guide.rtf" "${guidePath}" 300 40` : '',
-		`--app-drop-link ${appDropLink || '600 120'}`,
+		`--volname "${volumeName}"`,
+		`--background "${backgroundPath}"`,
+		'--window-pos 200 120',
+		'--window-size 660 400',
+		'--icon-size 160',
+		`--icon "${BuildConfig.appName}.app" 180 170`,
+		'--app-drop-link 480 170',
 		`"${outputName}.dmg"`,
 		`"${sourceFolder}"`,
-	].filter((arg) => arg !== ''); // Remove empty arguments
+	];
 
-	try {
-		await new Promise<void>((resolve, reject) => {
-			child_process.exec(args.join(' '), (error, stdout, stderr) => {
-				if (error) {
-					reject(error);
-				} else {
-					resolve();
-				}
-			});
+	const dmgPath = `${outputName}.dmg`;
+	if (existsSync(dmgPath)) rmSync(dmgPath);
+
+	const env = { ...process.env };
+	env.PATH = env.PATH?.split(':').filter((p) => !p.includes('node_modules/.bin')).join(':');
+
+	await new Promise<void>((resolve, reject) => {
+		child_process.exec(args.join(' '), { env }, (error) => {
+			if (error) reject(error);
+			else resolve();
 		});
-		console.log('DMG created successfully');
-	} catch (error) {
-		console.error('Failed to create DMG:', error);
-		throw new Error(`Failed to create DMG:\n${error}`);
-	}
+	});
 }
 
 async function build() {
@@ -75,7 +42,6 @@ async function build() {
 		return;
 	}
 
-	// Get architecture filter from environment
 	const architectureFilter = getArchitectureFilter();
 	const targetArchs = filterArchitectures(BuildConfig.mac.architecture, architectureFilter);
 
@@ -84,9 +50,14 @@ async function build() {
 		return;
 	}
 
+	const backgroundPath = resolve('./scripts/build/assets/bg.png');
+	if (!existsSync(backgroundPath)) {
+		logger.fatal(`Background image not found: ${backgroundPath}`);
+		return;
+	}
+
 	logger.info(`Creating DMG files for architectures: ${targetArchs.join(', ')}`);
 
-	// Create DMGs in parallel for multiple architectures
 	const dmgPromises = targetArchs.map(async (arch) => {
 		const appTime = performance.now();
 		const archLogger = new Signale({ scope: `dmg-${arch}`, interactive: false });
@@ -100,9 +71,8 @@ async function build() {
 			throw new Error(`App bundle not found for ${arch}`);
 		}
 
-		// Verify app bundle is valid
-		const infoPlistPath = resolve(appFolder, 'Contents/Info.plist');
-		const mainExecutablePath = resolve(appFolder, 'Contents/MacOS/main');
+		const infoPlistPath = join(appFolder, 'Contents/Info.plist');
+		const mainExecutablePath = join(appFolder, 'Contents/MacOS/main');
 
 		if (!existsSync(infoPlistPath) || !existsSync(mainExecutablePath)) {
 			archLogger.fatal(`Invalid app bundle: ${appFolder}`);
@@ -113,19 +83,7 @@ async function build() {
 			const dmgName = `${BuildConfig.appName}-${version}_${arch}`;
 			const dmgOutput = join(resolve('./dist'), dmgName);
 
-			await createCustomDMG({
-				sourceFolder: resolve(`./dist/mac_${arch}`),
-				outputName: dmgOutput,
-				volumeName: BuildConfig.appName,
-				backgroundPath: existsSync(resolve('./scripts/build/assets/bg.png'))
-					? resolve('./scripts/build/assets/bg.png')
-					: undefined,
-				windowPos: '200 120',
-				windowSize: '600 360',
-				iconSize: 90,
-				iconPos: '160 180',
-				appDropLink: '440 180',
-			});
+			await createDMG(resolve(`./dist/mac_${arch}`), dmgOutput, BuildConfig.appName, backgroundPath);
 
 			archLogger.complete(`DMG for ${arch} created in ${((performance.now() - appTime) / 1000).toFixed(3)}s`);
 			return { arch, success: true };
@@ -135,10 +93,7 @@ async function build() {
 		}
 	});
 
-	// Wait for all DMG creations to complete
 	const results = await Promise.allSettled(dmgPromises);
-
-	// Check results
 	const successful = results.filter((r) => r.status === 'fulfilled' && r.value.success);
 	const failed = results.filter((r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
 
