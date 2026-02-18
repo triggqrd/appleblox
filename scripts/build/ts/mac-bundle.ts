@@ -45,11 +45,11 @@ export async function macBuild(architectureFilter?: string | null) {
 	logger.success(`macOS build completed for ${targetArchs.length} architecture(s)`);
 }
 
-export async function macBuildSingle(arch: string, distPath: string) {
+export async function macBuildSingle(arch: string, distPath: string, librariesPath?: string) {
 	const appTime = performance.now();
 	const appDist = resolve(distPath, `mac_${arch}`);
 	const logger = createProgressLogger(`mac-${arch}`);
-	const Libraries = resolve('bin');
+	const Libraries = librariesPath ?? resolve('bin');
 	const LibrariesBlacklist = ['bootstrap', 'neutralino'];
 
 	logger.await(`Building macOS app bundle for ${arch}`);
