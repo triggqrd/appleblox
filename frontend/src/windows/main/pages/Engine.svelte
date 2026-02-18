@@ -17,6 +17,21 @@
 				.setDescription('Core graphics and performance settings')
 				.setId('graphics')
 				.addSelect({
+					label: 'Render Resolution',
+					description: 'Override the internal rendering resolution. Higher values produce sharper images but require more GPU power.',
+					id: 'resolution',
+					default: 'default',
+					items: [
+						{ label: 'Default', value: 'default' },
+						{ label: '8K (4320p)', value: '33178' },
+						{ label: '4K (2160p)', value: '8294' },
+						{ label: '1440p', value: '3686' },
+						{ label: '1080p', value: '2074' },
+						{ label: '720p', value: '922' },
+						{ label: '480p', value: '410' },
+					],
+				})
+				.addSelect({
 					label: 'Graphics API',
 					description: 'Select rendering backend',
 					id: 'engine',

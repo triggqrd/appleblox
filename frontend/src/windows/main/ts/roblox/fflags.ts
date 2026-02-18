@@ -24,6 +24,7 @@ const ALLOWED_FLAGS = [
 	'FFlagDebugSkyGray',
 	'DFFlagDebugPauseVoxelizer',
 	'DFIntDebugFRMQualityLevelOverride',
+	'DFIntDebugDynamicRenderKiloPixels',
 	'FIntFRMMaxGrassDistance',
 	'FIntFRMMinGrassDistance',
 	'FFlagDebugGraphicsPreferVulkan',
@@ -109,6 +110,15 @@ async function buildFlagsList(): Promise<FastFlagsList> {
 			path: 'engine.graphics.fracscaling',
 			type: 'switch',
 			value: true,
+		})
+		.addFlag({
+			name: 'Render Resolution',
+			flags: { DFIntDebugDynamicRenderKiloPixels: '%s' },
+			path: 'engine.graphics.resolution',
+			type: 'select',
+			value: async (settingValue) => {
+				return (settingValue as { label: string; value: string }).value !== 'default';
+			},
 		})
 		.addFlag({
 			name: 'Debug Sky',
