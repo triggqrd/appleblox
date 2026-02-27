@@ -30,7 +30,7 @@ async function getMacOSVersion(): Promise<number> {
  */
 async function compileAssetCatalog(iconBundlePath: string, outputDir: string): Promise<void> {
 	try {
-		await $`xcrun actool --compile ${outputDir} --platform macosx --minimum-deployment-target 10.13 --app-icon AppIcon --output-partial-info-plist /dev/null ${iconBundlePath}`;
+		await $`xcrun actool --compile ${outputDir} --platform macosx --minimum-deployment-target 26.0 --app-icon AppIcon --output-partial-info-plist /dev/null ${iconBundlePath}`;
 	} catch (error) {
 		throw new Error(`Asset catalog compilation failed: ${error}`);
 	}
