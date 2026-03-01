@@ -1,0 +1,6 @@
+#!/bin/bash
+# $2 is the install target root:
+#   system install -> "/"               -> /Applications/AppleBlox.app
+#   user install   -> "/Users/username" -> /Users/username/Applications/AppleBlox.app
+xattr -cr "$2/Applications/AppleBlox.app"
+exit 0
