@@ -35,6 +35,7 @@
         "@types/semver-compare": "^1.0.3",
         "@types/signale": "^1.4.7",
         "@types/tar": "^6.1.11",
+        "@xmldom/xmldom": "^0.8.11",
         "autoprefixer": "^10.4.22",
         "minimatch": "^10.1.1",
         "postcss": "^8.5.6",
@@ -229,6 +230,8 @@
     "@types/tar": ["@types/tar@6.1.13", "", { "dependencies": { "@types/node": "*", "minipass": "^4.0.0" } }, "sha512-IznnlmU5f4WcGTh2ltRu/Ijpmk8wiWXfF0VA4s+HPjHZgvFggk1YaIkbo5krX/zUCzWF8N/l4+W/LNxnvAJ8nw=="],
 
     "@types/trusted-types": ["@types/trusted-types@2.0.7", "", {}, "sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw=="],
+
+    "@xmldom/xmldom": ["@xmldom/xmldom@0.8.11", "", {}, "sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw=="],
 
     "acorn": ["acorn@8.15.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-NZyJarBfL7nWwIq+FDL6Zp/yHEhePMNnnJ0y3qfieCrmNvYct8uvtiV41UvlSe6apAfk0fY1FbWx+NwfmpvtTg=="],
 

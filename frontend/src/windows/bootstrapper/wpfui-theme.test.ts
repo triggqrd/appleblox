@@ -4,7 +4,6 @@
  */
 
 import { describe, expect, it } from 'bun:test';
-// @ts-ignore — xmldom is a transitive dep, not listed in package.json but available
 import { DOMParser as XmlDOMParser } from '@xmldom/xmldom';
 
 // Polyfill DOMParser before any test runs — must be module-level (not in beforeAll)

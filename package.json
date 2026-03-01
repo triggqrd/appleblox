@@ -50,6 +50,7 @@
 		"@types/semver-compare": "^1.0.3",
 		"@types/signale": "^1.4.7",
 		"@types/tar": "^6.1.11",
+		"@xmldom/xmldom": "^0.8.11",
 		"autoprefixer": "^10.4.22",
 		"minimatch": "^10.1.1",
 		"postcss": "^8.5.6",
