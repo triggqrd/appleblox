@@ -9,7 +9,8 @@
     {
       "layers" : [
         {
-          "image-name" : "logo.png",
+          "glass" : false,
+          "image-name" : "logo.svg",
           "name" : "logo"
         }
       ],
@@ -18,7 +19,7 @@
         "opacity" : 0.5
       },
       "translucency" : {
-        "enabled" : true,
+        "enabled" : false,
         "value" : 0.5
       }
     }
