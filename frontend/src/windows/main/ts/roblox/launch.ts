@@ -32,19 +32,20 @@ const logger = Logger.withContext('Launch');
 /** Delay in ms added between each visible bootstrapper step when the setting is enabled. */
 const FIXED_STEP_DELAY = 1200;
 
-let allowFixedDelays = true;
-getValue<boolean>('misc.advanced.allow_fixed_loading_times')
-	.then((value) => {
-		// value is null when the setting has never been saved — default to true
-		allowFixedDelays = value ?? true;
-	})
-	.catch((err) => {
-		logger.error("Couldn't determine loading time settings:", err);
-	});
+let _allowFixedDelays: boolean | null = null;
+async function getAllowFixedDelays(): Promise<boolean> {
+	if (_allowFixedDelays !== null) return _allowFixedDelays;
+	try {
+		_allowFixedDelays = (await getValue<boolean>('misc.advanced.allow_fixed_loading_times')) ?? true;
+	} catch {
+		_allowFixedDelays = true;
+	}
+	return _allowFixedDelays;
+}
 
 let rbxInstance: RobloxInstance | null = null;
 let bootstrapperProcess: SpawnEventEmitter | null = null;
-let initialProgressListener: any = null;
+let initialProgressListener: ((evt: { detail: string }) => Promise<void>) | null = null;
 
 interface LaunchSettings {
 	areModsEnabled: boolean;
@@ -73,7 +74,9 @@ async function validateAndCleanup(): Promise<boolean> {
 		try {
 			const oldPid = await shellFS.readFile('/tmp/appleblox_bootstrapper.pid');
 			await os.execCommand(`kill ${oldPid.trim()}`);
-		} catch {}
+		} catch (err) {
+			logger.debug('Could not kill old bootstrapper process:', err);
+		}
 		await shellFS.remove('/tmp/appleblox_bootstrapper.pid');
 	}
 
@@ -87,7 +90,7 @@ async function validateAndCleanup(): Promise<boolean> {
 async function validateFlags(showFlagErrorPopup: LaunchHandlers['showFlagErrorPopup'], checkFlags = true): Promise<any> {
 	await updateBootstrapper('bootstrapper:text', { text: 'Validating preset flags...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 15 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	const presetFlags = await RobloxFFlags.parseFlags(true);
 
@@ -101,7 +104,7 @@ async function validateFlags(showFlagErrorPopup: LaunchHandlers['showFlagErrorPo
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Validating custom flags...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 25 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	const editorFlags = await RobloxFFlags.parseFlags(false);
 
@@ -116,7 +119,7 @@ async function validateFlags(showFlagErrorPopup: LaunchHandlers['showFlagErrorPo
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Validating game profiles...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 30 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	if (checkFlags && editorFlags.invalidProfileFlags && editorFlags.invalidProfileFlags.length > 0) {
 		const allFlagKeys = editorFlags.invalidProfileFlags.reduce(
@@ -402,7 +405,7 @@ async function applyRegionSelection(originalUrl?: string): Promise<string | unde
 async function prepareRobloxSettings(robloxPath: string, fflags: any): Promise<void> {
 	await updateBootstrapper('bootstrapper:text', { text: 'Checking existing settings...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 35 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	const settingsPath = path.join(robloxPath, 'Contents/MacOS/ClientSettings/');
 	const settingsFile = path.join(settingsPath, 'ClientAppSettings.json');
@@ -410,18 +413,18 @@ async function prepareRobloxSettings(robloxPath: string, fflags: any): Promise<v
 	if (await shellFS.exists(settingsFile)) {
 		await updateBootstrapper('bootstrapper:text', { text: 'Removing old settings...' });
 		await updateBootstrapper('bootstrapper:progress', { progress: 40 });
-		if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+		if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 		await shellFS.remove(settingsPath);
 	}
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Creating settings directory...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 45 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 	await shellFS.createDirectory(settingsPath);
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Writing FastFlags configuration...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 50 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 	await shellFS.writeFile(settingsFile, JSON.stringify(fflags));
 }
 
@@ -429,25 +432,25 @@ async function applyModsAndLaunch(settings: LaunchSettings, robloxUrl?: string):
 	// Create icon color backup BEFORE mods are applied (so we have the original files)
 	await updateBootstrapper('bootstrapper:text', { text: 'Creating backups...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 53 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 	await RobloxMods.createIconColorBackup();
 
 	if (settings.areModsEnabled) {
 		await updateBootstrapper('bootstrapper:text', { text: 'Copying mod files...' });
 		await updateBootstrapper('bootstrapper:progress', { progress: 55 });
-		if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+		if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 		await RobloxMods.copyToFiles();
 	}
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Applying custom fonts...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 60 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 	await RobloxMods.applyCustomFont();
 
 	// Apply icon color AFTER mods so it takes priority over any mod-modified BuilderIcons
 	await updateBootstrapper('bootstrapper:text', { text: 'Applying icon color...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 70 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 	await RobloxMods.applyIconColor();
 
 	// Legacy resolution is now handled via launch argument in RobloxInstance.start()
@@ -455,14 +458,14 @@ async function applyModsAndLaunch(settings: LaunchSettings, robloxUrl?: string):
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Initializing Roblox instance...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 80 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	const robloxInstance = new RobloxInstance(true);
 	await robloxInstance.init();
 
 	await updateBootstrapper('bootstrapper:text', { text: 'Starting Roblox...' });
 	await updateBootstrapper('bootstrapper:progress', { progress: 100 });
-	if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+	if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 	await cleanupBootstrapper();
 	await robloxInstance.start(robloxUrl);
@@ -541,7 +544,7 @@ export async function launchRoblox(
 
 		await updateBootstrapper('bootstrapper:text', { text: 'Checking Roblox installation...' });
 		await updateBootstrapper('bootstrapper:progress', { progress: 10 });
-		if (allowFixedDelays) await sleep(FIXED_STEP_DELAY);
+		if (await getAllowFixedDelays()) await sleep(FIXED_STEP_DELAY);
 
 		const hasRoblox = await RobloxUtils.hasRoblox();
 
