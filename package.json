@@ -1,6 +1,6 @@
 {
 	"name": "appleblox",
-	"version": "0.9.0-dev.43",
+	"version": "0.9.0-dev.44",
 	"description": "Lightweight and fast Roblox launcher for MacOS",
 	"scripts": {
 		"vite:dev": "vite",
