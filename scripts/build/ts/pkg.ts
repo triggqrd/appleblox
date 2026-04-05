@@ -1,6 +1,6 @@
 import BuildConfig from '@root/build.config';
 import child_process from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Signale } from 'signale';
 import { version } from '../../../package.json';
@@ -13,6 +13,26 @@ async function exec(command: string): Promise<void> {
             else res();
         });
     });
+}
+
+/**
+ * Wraps a PKG installer inside a DMG using the legacy naming scheme expected by
+ * the 0.8.x updater: AppleBlox-{version}_{arch}.dmg
+ * Users on 0.8.6 will download this DMG, mount it, and find the PKG inside.
+ */
+async function createDMGWrapper(pkgPath: string, dmgOutput: string): Promise<void> {
+    const tmpDir = resolve(`.tmpbuild/dmgwrap_${Date.now()}`);
+    mkdirSync(tmpDir, { recursive: true });
+
+    try {
+        copyFileSync(pkgPath, join(tmpDir, 'Install AppleBlox.pkg'));
+        if (existsSync(dmgOutput)) rmSync(dmgOutput);
+        await exec(
+            `hdiutil create -volname "AppleBlox" -srcfolder "${tmpDir}" -ov -format UDZO "${dmgOutput}"`
+        );
+    } finally {
+        rmSync(tmpDir, { recursive: true, force: true });
+    }
 }
 
 async function createPKG(appPath: string, outputPath: string) {
@@ -141,7 +161,13 @@ async function build() {
 
             await createPKG(appFolder, pkgOutput);
 
-            archLogger.complete(`PKG for ${arch} created in ${((performance.now() - appTime) / 1000).toFixed(3)}s`);
+            // Create a legacy DMG wrapper so 0.8.x users get the update prompt and
+            // can download a file matching the old AppleBlox-{version}_{arch}.dmg URL.
+            const dmgName = `${BuildConfig.appName}-${version}_${arch}.dmg`;
+            const dmgOutput = join(resolve('./dist'), dmgName);
+            await createDMGWrapper(pkgOutput, dmgOutput);
+
+            archLogger.complete(`PKG + DMG wrapper for ${arch} created in ${((performance.now() - appTime) / 1000).toFixed(3)}s`);
             return { arch, success: true };
         } catch (err) {
             archLogger.fatal(`Failed to create PKG for ${arch}: ${err}`);

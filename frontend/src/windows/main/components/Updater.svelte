@@ -28,7 +28,7 @@
 			throw new Error(`Failed to fetch version info: ${response.error || 'No response body'}`);
 		}
 		const releases = JSON.parse(response.body);
-		if (releases) return;
+		if (!Array.isArray(releases)) return;
 		for (const re of releases) {
 			if (compare(re.tag_name, updateVersion) === 1) {
 				updateVersion = re.tag_name;
@@ -81,7 +81,7 @@
 			<AlertDialog.Action
 				on:click={() => {
 					os.open(
-						`https://github.com/AppleBlox/appleblox/releases/download/${updateVersion}/AppleBlox-${updateVersion}_${getArch()}.dmg`
+						`https://github.com/AppleBlox/appleblox/releases/download/${updateVersion}/AppleBlox-${updateVersion}_${getArch()}.pkg`
 					);
 				}}>Install</AlertDialog.Action
 			>
