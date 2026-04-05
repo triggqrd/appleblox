@@ -1,8 +1,8 @@
 // Set up keyboard shortcuts and add extra commands to neutralino
 import { events } from '@neutralinojs/lib';
-
 import hotkeys from 'hotkeys-js';
 import { shell } from './tools/shell';
+import Logger from '@/windows/main/ts/utils/logger';
 
 // Shortcuts like copy, paste, quit, etc... (they are unimplemented by default in NeuJS)
 hotkeys.filter = () => true;
@@ -42,6 +42,16 @@ hotkeys('cmd+q,cmd+w', () => {
 	return false;
 });
 
+hotkeys('cmd+p,ctrl+p', () => {
+	events.broadcast('exportSettings');
+	return false;
+});
+
+hotkeys('cmd+r,ctrl+r', () => {
+	events.broadcast('installRoblox');
+	return false;
+});
+
 export async function focusWindow() {
 	try {
 		shell(
@@ -50,7 +60,7 @@ export async function focusWindow() {
 			{ skipStderrCheck: true, completeCommand: true }
 		);
 	} catch (err) {
-		console.error(err);
+		Logger.error(err);
 	}
 }
 
@@ -62,6 +72,6 @@ export async function setWindowVisibility(state: boolean) {
 			{ skipStderrCheck: true, completeCommand: true }
 		);
 	} catch (err) {
-		console.error(err);
+		Logger.error(err);
 	}
 }

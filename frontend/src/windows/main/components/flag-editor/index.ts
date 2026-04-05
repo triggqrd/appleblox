@@ -3,6 +3,7 @@ import path from 'path-browserify';
 import type { FastFlag } from '../../ts/roblox/fflags';
 import shellFS from '../../ts/tools/shellfs';
 import { getConfigPath } from '../settings';
+import Logger from '@/windows/main/ts/utils/logger';
 
 export interface EditorFlag {
 	flag: string;
@@ -63,16 +64,17 @@ export async function getAllProfiles(): Promise<Profile[]> {
 	}
 	const entries = await filesystem.readDirectory(await getProfilesConfigPath());
 	for (const file of entries) {
+		if (!file.path.endsWith('.json')) continue;
 		try {
 			const data: Profile = JSON.parse(await filesystem.readFile(file.path));
 			// Check if the profile json is valid
 			if (!isValidProfile(data)) {
-				console.warn(`[FastFlags] Profile "${path.basename(file.path)}" contains invalid properties. Skipping.`);
+				Logger.warn(`Profile "${path.basename(file.path)}" contains invalid properties. Skipping.`);
 				continue;
 			}
 			profiles.push(data);
 		} catch (err) {
-			console.error(`[FastFlags] Couldn't parse profile "${path.basename(file.path)}":`, err);
+			Logger.error(`Couldn't parse profile "${path.basename(file.path)}":`, err);
 		}
 	}
 	return profiles;
@@ -120,7 +122,7 @@ async function readConfig(): Promise<ProfilesConfig> {
 		}
 		return await JSON.parse(await filesystem.readFile(filePath));
 	} catch (err) {
-		console.error(err);
+		Logger.error(err);
 		return { selected: null };
 	}
 }
@@ -128,7 +130,7 @@ async function readConfig(): Promise<ProfilesConfig> {
 /** Returns the active profile */
 export async function getSelectedProfile(profiles: Profile[]): Promise<Profile | null> {
 	const config = await readConfig();
-	return profiles.find((p) => stringToId(p.name) === config.selected) || null;
+	return profiles.find((p) => stringToId(p.name) === config.selected) || profiles[0];
 }
 
 /** Set the selected profile */
@@ -142,7 +144,7 @@ export async function setSelectedProfile(name: string): Promise<void> {
 export async function writeProfile(name: string, profile: Partial<Profile>) {
 	let p = await getProfile(name); // profile
 	if (!p) {
-		throw new Error(`[FastFlags] Profile "${name}" doesn't exist.`);
+		throw new Error(`Profile "${name}" doesn't exist.`);
 	}
 	p = { ...p, ...profile };
 	const profilePath = path.join(await getProfilesConfigPath(), `${stringToId(name)}.json`);

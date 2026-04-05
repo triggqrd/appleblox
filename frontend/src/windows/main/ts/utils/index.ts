@@ -21,16 +21,6 @@ export function sleep(ms = 0) {
 }
 
 /**
- * Interface representing the result of JSON parsing operation
- */
-interface JSONParseResult {
-	/** The successfully parsed JSON object */
-	parsedJSON: any;
-	/** Array of corrections made during parsing */
-	corrections: string[];
-}
-
-/**
  * Returns the current date in a format compatible with POSIX path names.
  * The format is: YYYY-MM-DD_HH-mm-ss
  *

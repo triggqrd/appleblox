@@ -1,24 +1,47 @@
-name: Build and Create DMG
+name: Build and Create PKG
 
 on:
   push:
-    branches:
-      - main
-      - dev
+    branches: [main, dev]
   pull_request:
-    branches:
-      - main
-      - dev
+    types: [opened, synchronize]
+    branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-26
     outputs:
       version: ${{ env.VERSION }}
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Check macOS Version
+        id: macos_version
+        run: |
+          MACOS_VERSION=$(sw_vers -productVersion | cut -d. -f1)
+          echo "version=$MACOS_VERSION" >> $GITHUB_OUTPUT
+          echo "Running on macOS $MACOS_VERSION"
+
+          if [ "$MACOS_VERSION" -ge 26 ]; then
+            echo "macOS 26+ detected - Liquid Glass icons will be compiled"
+          else
+            echo "macOS < 26 detected - will use traditional .icns icons"
+          fi
+
+      - name: Setup Xcode (macOS 26+)
+        if: steps.macos_version.outputs.version >= '26'
+        run: |
+          # Select Xcode 26 for Liquid Glass icon compilation
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+          echo "Xcode configured for Liquid Glass asset compilation"
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -29,14 +52,12 @@ jobs:
         run: bun install
         continue-on-error: false
 
-      - name: Install create-dmg
-        run: |
-          brew update
-          brew install create-dmg
+      - name: Run tests
+        run: bun test
         continue-on-error: false
 
       - name: Build and package app
-        run: bun run release
+        run: bun run release:sequential
         continue-on-error: false
 
       - name: Get version from package.json
@@ -49,11 +70,11 @@ jobs:
             exit 1
           fi
 
-      - name: Verify DMG files exist
+      - name: Verify PKG files exist
         run: |
           for arch in x64 universal arm64; do
-            if [ ! -f "dist/AppleBlox-${VERSION}_${arch}.dmg" ]; then
-              echo "Error: DMG file for ${arch} not found"
+            if [ ! -f "dist/AppleBlox-${arch}-${VERSION}.pkg" ]; then
+              echo "Error: PKG file for ${arch} not found"
               exit 1
             fi
           done
@@ -61,24 +82,24 @@ jobs:
       - name: Upload (mac_x64)
         uses: actions/upload-artifact@v4
         with:
-          name: AppleBlox-${{ env.VERSION }}_x64.dmg
-          path: dist/AppleBlox-${{ env.VERSION }}_x64.dmg
+          name: AppleBlox-x64-${{ env.VERSION }}.pkg
+          path: dist/AppleBlox-x64-${{ env.VERSION }}.pkg
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload (mac_universal)
         uses: actions/upload-artifact@v4
         with:
-          name: AppleBlox-${{ env.VERSION }}_universal.dmg
-          path: dist/AppleBlox-${{ env.VERSION }}_universal.dmg
+          name: AppleBlox-universal-${{ env.VERSION }}.pkg
+          path: dist/AppleBlox-universal-${{ env.VERSION }}.pkg
           if-no-files-found: error
           retention-days: 30
 
       - name: Upload (mac_arm64)
         uses: actions/upload-artifact@v4
         with:
-          name: AppleBlox-${{ env.VERSION }}_arm64.dmg
-          path: dist/AppleBlox-${{ env.VERSION }}_arm64.dmg
+          name: AppleBlox-arm64-${{ env.VERSION }}.pkg
+          path: dist/AppleBlox-arm64-${{ env.VERSION }}.pkg
           if-no-files-found: error
           retention-days: 30
 
@@ -87,9 +108,19 @@ jobs:
         run: |
           echo "### Build Results 📦" >> $GITHUB_STEP_SUMMARY
           echo "Version: ${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
-          echo "- x64 DMG: $(ls -lh dist/AppleBlox-${VERSION}_x64.dmg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
-          echo "- Universal DMG: $(ls -lh dist/AppleBlox-${VERSION}_universal.dmg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
-          echo "- ARM64 DMG: $(ls -lh dist/AppleBlox-${VERSION}_arm64.dmg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
+          if ls .tmpbuild/mac_*/AppleBlox.app/Contents/Resources/Assets.car 1> /dev/null 2>&1; then
+            echo "- [x] Liquid Glass Icons" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- [] Liquid Glass Icons" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### PKG Files" >> $GITHUB_STEP_SUMMARY
+          echo "- x64 PKG: $(ls -lh dist/AppleBlox-x64-${VERSION}.pkg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
+          echo "- Universal PKG: $(ls -lh dist/AppleBlox-universal-${VERSION}.pkg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
+          echo "- ARM64 PKG: $(ls -lh dist/AppleBlox-arm64-${VERSION}.pkg 2>/dev/null || echo 'Not built')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Icon Support" >> $GITHUB_STEP_SUMMARY
+          echo "- macOS Version: ${{ steps.macos_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
 
   create-release:
     needs: build
@@ -131,7 +162,7 @@ jobs:
           tag_name: ${{ needs.build.outputs.version }}
           draft: true
           files: |
-            ./artifacts/AppleBlox-*/*.dmg
+            ./artifacts/AppleBlox-*/*.pkg
           generate_release_notes: true
           body_path: CHANGELOG.md
         env:

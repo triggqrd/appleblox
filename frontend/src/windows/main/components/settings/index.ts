@@ -128,6 +128,8 @@ export interface PanelWidget {
 	options: WidgetOptions;
 	/** Toggleable option referencing another widget */
 	toggleable?: ToggleableOption;
+	/** Add a separator at the top */
+	separator?: boolean;
 }
 
 export interface Category {
@@ -136,6 +138,8 @@ export interface Category {
 	id: string;
 	widgets: PanelWidget[];
 	categories: Category[];
+	/** Hide the separator line before widgets in this category */
+	hideSeparator?: boolean;
 }
 
 export interface SettingsPanel {
@@ -155,6 +159,7 @@ class CategoryBuilder {
 			id,
 			widgets: [],
 			categories: [],
+			hideSeparator: false,
 		};
 	}
 
@@ -170,6 +175,11 @@ class CategoryBuilder {
 
 	setId(id: string): this {
 		this.category.id = id;
+		return this;
+	}
+
+	setHideSeparator(hide: boolean): this {
+		this.category.hideSeparator = hide;
 		return this;
 	}
 
@@ -342,6 +352,7 @@ class CategoryBuilder {
 		label: string;
 		description: string;
 		id: string;
+		separator?: boolean;
 		component: ComponentType<SvelteComponent>;
 		toggleable?: ToggleableOption;
 	}) {
@@ -350,6 +361,7 @@ class CategoryBuilder {
 			description: params.description,
 			id: params.id,
 			toggleable: params.toggleable,
+			separator: params.separator,
 			options: { type: 'custom', component: params.component },
 		};
 		this.category.widgets.push(widget);

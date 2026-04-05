@@ -1,12 +1,22 @@
 {
 	"applicationId": "ch.origaming.appleblox",
-	"version": "0.1.0",
+	"version": "0.9.0",
 	"defaultMode": "window",
 	"documentRoot": "/frontend/dist",
 	"url": "/",
 	"enableServer": true,
 	"enableNativeAPI": true,
-	"nativeAllowList": ["events.*", "os.*", "filesystem.*", "window.*", "clipboard.*", "computer.*","app.*"],
+	"nativeAllowList": [
+		"server.*",
+		"events.*",
+		"os.*",
+		"filesystem.*",
+		"window.*",
+		"clipboard.*",
+		"computer.*",
+		"app.*",
+		"storage.*"
+	],
 	"exportAuthInfo": false,
 	"logging": {
 		"writeToLogFile": false,
@@ -18,27 +28,22 @@
 			"hidden": true,
 			"title": "AppleBlox",
 			"width": 1150,
-			"height": 700,
+			"height": 720,
 			"minWidth": 400,
 			"minHeight": 200,
-			"icon": "/scripts/build/assets/mac.png",
 			"exitProcessOnClose": false,
 			"useSavedState": false,
 			"extendUserAgentWith": "AppleBlox",
 			"resizable": false,
 			"center": true
-		},
-		"chrome": {
-			"width": 1150,
-			"height": 700
 		}
 	},
 	"cli": {
 		"binaryName": "appleblox",
 		"resourcesPath": "/frontend/dist",
 		"extensionsPath": "/extensions/",
-		"binaryVersion": "5.1.0",
-		"clientVersion": "3.12.0",
+		"binaryVersion": "6.3.0",
+		"clientVersion": "6.3.0",
 		"frontendLibrary": {
 			"buildCommand": "true",
 			"patchFile": "/frontend/index.html",

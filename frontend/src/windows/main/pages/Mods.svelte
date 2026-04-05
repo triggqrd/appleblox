@@ -1,21 +1,26 @@
 <script lang="ts">
-	import ApplebloxIcon from '@/assets/favicon.png';
-	import BloxstrapIcon from '@/assets/panel/bloxstrap.png';
+	import ApplebloxIcon from '@/assets/appleblox.svg';
+	import GamebananaIcon from '@/assets/panel/gamebanana.png';
 	import { filesystem, os } from '@neutralinojs/lib';
 	import { Book } from 'lucide-svelte';
 	import path from 'path-browserify';
-	import { SettingsPanelBuilder } from '../components/settings';
+	import { toast } from 'svelte-sonner';
+	import ModsUi from '../components/mods-ui.svelte';
+	import IconColorPicker from '../components/icon-color-picker.svelte';
+	import { SettingsPanelBuilder, getValue } from '../components/settings';
 	import Panel from '../components/settings/panel.svelte';
 	import shellFS from '../ts/tools/shellfs';
-	import ModsUi from '../components/mods-ui.svelte';
+	import Logger from '@/windows/main/ts/utils/logger';
+	import { getFontsCacheDir } from '../ts/utils/paths';
+	import { generateIconColorCache, removeIconColorCache } from '../ts/roblox/font-colorizer';
 
 	export let render = true;
 
 	async function onButtonClicked(e: CustomEvent) {
 		const { id } = e.detail;
 		switch (id) {
-			case 'join_bloxstrap':
-				os.open('https://discord.gg/nKjV3mGq6R');
+			case 'open_gamebanana':
+				os.open('https://gamebanana.com/games/2879');
 				break;
 			case 'join_appleblox':
 				os.open('https://appleblox.com/discord');
@@ -30,9 +35,9 @@
 		const { id, file } = e.detail;
 		switch (id) {
 			case 'custom_font': {
-				const cachePath = path.join(await os.getEnv('HOME'), 'Library/Application Support/AppleBlox/.cache/fonts');
+				const cachePath = await getFontsCacheDir();
 				await shellFS.createDirectory(cachePath);
-				await filesystem.copy(file, path.join(cachePath, `CustomFont${path.extname(file)}`)).catch(console.error);
+				await filesystem.copy(file, path.join(cachePath, `CustomFont${path.extname(file)}`)).catch(Logger.error);
 				break;
 			}
 		}
@@ -42,18 +47,67 @@
 		const { id } = e.detail;
 		switch (id) {
 			case 'custom_font':
-				await shellFS.remove(
-					path.join(await os.getEnv('HOME'), 'Library', 'Application Support', 'AppleBlox/.cache/fonts/CustomFont.ttf'),
-					{ skipStderrCheck: true }
-				);
-				await shellFS.remove(
-					path.join(await os.getEnv('HOME'), 'Library', 'Application Support', 'AppleBlox/.cache/fonts/CustomFont.otf'),
-					{ skipStderrCheck: true }
-				);
-				await shellFS.remove(
-					path.join(await os.getEnv('HOME'), 'Library', 'Application Support', 'AppleBlox/.cache/fonts/CustomFont.ttc'),
-					{ skipStderrCheck: true }
-				);
+				for (const ext of ['ttf', 'otf', 'ttc']) {
+					const fontPath = path.join(
+						await os.getEnv('HOME'),
+						'Library',
+						'Application Support',
+						`AppleBlox/cache/fonts/CustomFont.${ext}`
+					);
+					await shellFS.remove(
+						path.join(
+							await os.getEnv('HOME'),
+							'Library',
+							'Application Support',
+							`AppleBlox/cache/fonts/LastCustomFont.${ext}`
+						),
+						{ skipStderrCheck: true }
+					);
+					if (await shellFS.exists(fontPath)) {
+						await shellFS.move(
+							fontPath,
+							path.join(
+								await os.getEnv('HOME'),
+								'Library',
+								'Application Support',
+								`AppleBlox/cache/fonts/LastCustomFont.${ext}`
+							)
+						);
+					}
+
+					await shellFS.remove(fontPath, { skipStderrCheck: true });
+				}
+				break;
+		}
+	}
+
+	async function onSwitchChanged(e: CustomEvent) {
+		const { id, state } = e.detail;
+		switch (id) {
+			case 'icon_color_enabled':
+				if (state) {
+					// When enabled, generate cache with saved color or default white
+					try {
+						let savedColor = '#FFFFFF';
+						try {
+							const color = await getValue<string | null>('mods.builtin.icon_color');
+							if (color) savedColor = color;
+						} catch {
+							// No saved color
+						}
+						await generateIconColorCache(savedColor);
+					} catch (err) {
+						Logger.error('Failed to generate icon color cache:', err);
+						toast.error(`Failed to generate icon color: ${(err as Error).message}`);
+					}
+				} else {
+					// When disabled, remove cache
+					try {
+						await removeIconColorCache();
+					} catch (err) {
+						Logger.error('Failed to remove icon color cache:', err);
+					}
+				}
 				break;
 		}
 	}
@@ -73,12 +127,26 @@
 					id: 'custom_font',
 					accept: ['ttf', 'otf', 'ttc'],
 				})
+				.addSwitch({
+					label: 'Icons Color',
+					description: 'Change the color of Roblox UI icons',
+					id: 'icon_color_enabled',
+					default: false,
+				})
+				.addCustom({
+					label: '',
+					description: '',
+					id: 'icon_color_picker',
+					separator: false,
+					component: IconColorPicker,
+					toggleable: { id: 'icon_color_enabled', type: 'switch', value: true },
+				})
 		)
 		.addCategory((category) =>
 			category
 				.setName('Custom Mods')
 				.setDescription(
-					"To install mods, drag files to the mods folder. Find mods in the Bloxstrap Discord - please don't request AppleBlox support there"
+					'To install mods, drag files to the mods folder. Find mods in the AppleBlox discord server or Gamebanana.'
 				)
 				.setId('general')
 				.addButton({
@@ -96,11 +164,11 @@
 					icon: { src: ApplebloxIcon },
 				})
 				.addButton({
-					label: 'Bloxstrap Discord',
+					label: 'Gamebanana',
 					description: 'Find and download compatible mods',
-					id: 'join_bloxstrap',
+					id: 'open_gamebanana',
 					variant: 'outline',
-					icon: { src: BloxstrapIcon },
+					icon: { src: GamebananaIcon },
 				})
 				.addSwitch({
 					label: 'Enable Mods',
@@ -110,7 +178,8 @@
 				})
 				.addSwitch({
 					label: 'Legacy Resolution',
-					description: 'Lower resolution for mods not designed for Retina displays',
+					description:
+						'Lower resolution for mods not designed for Retina displays. <br><span style="color: hsl(var(--warning));">This feature may break voice chat.</span>',
 					id: 'fix_res',
 					default: false,
 				})
@@ -144,4 +213,11 @@
 	};
 </script>
 
-<Panel {panel} on:button={onButtonClicked} on:fileChosen={onFileAdded} on:fileRemoved={onFileRemoved} {render} />
+<Panel
+	{panel}
+	on:button={onButtonClicked}
+	on:fileChosen={onFileAdded}
+	on:fileRemoved={onFileRemoved}
+	on:switch={onSwitchChanged}
+	{render}
+/>

@@ -1,6 +1,7 @@
 import { getValue } from '../../components/settings';
 import { libraryPath } from '../libraries';
 import { buildCommand, spawn, type SpawnEventEmitter } from './shell';
+import Logger from '@/windows/main/ts/utils/logger';
 
 /**
  * Represents an action that can be associated with a notification.
@@ -150,6 +151,23 @@ export class Notification {
 				this.options.sound = this.options.sound || 'funk';
 			}
 
+			// AppleScript (alternative) notifications
+			if ((await getValue<boolean>('misc.advanced.alternative_notifications')) === true) {
+				const escapeString = (str: string) => str.replace(/[\\"]/g, '\\$&');
+				const script = `display notification "${escapeString(this.options.content)}" with title "${escapeString(this.options.title)}"${
+					this.options.subtitle ? ` subtitle "${escapeString(this.options.subtitle)}"` : ''
+				}${this.options.sound ? ` sound name "${escapeString(this.options.sound)}"` : ''}`;
+
+				this.process = await spawn('osascript', ['-e', script]);
+				this.process.on('exit', (code) => {
+					if (code === 0) this.emit('clicked');
+					else this.emit('closed');
+				});
+
+				await this.process;
+				return;
+			}
+
 			const alerter = libraryPath('notifications');
 
 			const args = [
@@ -177,7 +195,7 @@ export class Notification {
 			}
 
 			this.process = await spawn(alerter, args);
-			console.info(`Spawning notification: ${buildCommand(alerter, args)}`);
+			Logger.info(`Spawning notification: ${buildCommand(alerter, args)}`);
 
 			this.process.on('stdOut', (data) => {
 				const trimmedData = data.trim();
@@ -207,7 +225,7 @@ export class Notification {
 
 			await this.process;
 		} catch (err) {
-			console.error('Error showing notification:', err);
+			Logger.error('Error showing notification:', err);
 			throw err;
 		}
 	}

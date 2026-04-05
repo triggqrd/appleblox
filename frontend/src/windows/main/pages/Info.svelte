@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { os } from '@neutralinojs/lib';
 	import { Github, MessageSquare } from 'lucide-svelte';
+	import Informations from '../components/informations/informations.svelte';
 	import { SettingsPanelBuilder } from '../components/settings';
 	import Panel from '../components/settings/panel.svelte';
-	import Informations from '../components/informations/informations.svelte';
 
 	export let render = true;
 
@@ -20,7 +20,7 @@
 	}
 
 	const panel = new SettingsPanelBuilder()
-		.setName('About')
+		.setName('Information')
 		.setId('info')
 		.setDescription('About AppleBlox and helpful resources')
 		.addCategory((category) =>
