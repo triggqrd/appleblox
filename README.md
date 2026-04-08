@@ -1,6 +1,3 @@
-> [!NOTE]  
-> No, this project is not discontinued. Updates are coming. You can test them right now with the [dev builds](https://appleblox.com/download/dev).
-
 # AppleBlox
 
 <div align="center">
@@ -18,35 +15,11 @@
 
 AppleBlox is a Roblox launcher for **MacOS**, inspired by [Bloxstrap](https://github.com/pizzaboxer/bloxstrap). It includes features such as DiscordRPC and Fast-flags, with ongoing development for additional functionality.
 
-The latest version is available on the [Releases](https://github.com/AppleBlox/appleblox/releases/latest) page. For more recent builds, see the [nightly releases](https://nightly.link/AppleBlox/appleblox/workflows/build/dev?preview).
-
-Versions:
-- arm64 (Apple Silicon Chips such as: M1, M2, M3, etc)
-- x64 (Intel Architecture)
-- universal (Universal Version)
-
-For the development version (more unstable but has the latest features and more) see the [development releases](https://nightly.link/AppleBlox/appleblox/workflows/build/dev?preview)
+The latest version is available on the [Releases](https://github.com/AppleBlox/appleblox/releases/latest) page. For more recent (development) builds, see the [nightly releases](https://nightly.link/AppleBlox/appleblox/workflows/build/dev?preview).
 
 ## Features
 
-- Server Notifications: Displays the hosting region of the game server.
-- Discord Rich Presence: Integrates with Discord to show gaming activity.
-- FFlags Presets: Provides pre-configured Fast flags settings.
-- Custom Flags: Allows creation of custom FastFlags profiles, including game-specific configurations.
-- Multi-instance (Experimental): Enables running multiple Roblox windows simultaneously.
-- Mods: Supports UI customization through community-created mods.
-- Bloxstrap SDK: In-house implementation of Bloxstrap SDK for game developers.
-
-## App Related Features
-
-- Customizable Appearance: Allows for a different design for the app using community-made themes.
-- Delegate Launching to Appleblox: Let AppleBlox configure settings before launching Roblox.
-- Disable Roblox Desktop App: Automatically close Roblox when leaving games.
-
-## Uninstallation
-
-1. Open AppleBlox, go to **Settings → Advanced** and click **Reset Data** to remove all app data and settings.
-2. Drag **AppleBlox.app** from your Applications folder to the Trash.
+AppleBlox supports many useful features, notably the ability to change the Roblox font and icon color along with other assets, go past your screen's refresh rate cap, show what you're playing on Discord, choose which region you want to prioritize joining, and many more features, all documented on the [official documentation](https://docs.appleblox.com).
 
 ## Development
 
@@ -72,13 +45,7 @@ The build script utilizes pre-compiled binaries for `alerter` and `discord-rpc-c
 
 ## Privacy Policy
 
-AppleBlox connects to the following external services:
-
-- **Discord**: When Discord Rich Presence is enabled, your current game activity (game name, server region, elapsed time) is shared with Discord. This feature can be disabled at any time in Settings → Integrations.
-- **RoValra API**: Used to determine your game server's hosting region. No personally identifiable information is transmitted.
-- **Roblox services**: Used to check for and download Roblox client updates.
-
-AppleBlox does not collect, store, or transmit any personal data beyond what is described above. No analytics or telemetry are included.
+AppleBlox does not collect, store, or transmit any personal data. The only information sent to external non-Roblox servers are statistics about the Roblox game servers you join (uptime, region, ...), when you use the "Region selection" feature. AppleBlox uses the [RoValra[(https://www.rovalra.com/) API and needs to transmit this data to make sure the API stays up-to-date. No personal data is ever collected.
 
 ## Contributing
 
