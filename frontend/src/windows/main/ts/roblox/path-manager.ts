@@ -1,3 +1,4 @@
+import { filesystem } from '@neutralinojs/lib';
 import { getValue, setValue } from '../../components/settings';
 import Logger from '../utils/logger';
 import { detectRobloxPath, validateRobloxPath } from './path';
@@ -106,10 +107,21 @@ class RobloxPathManager {
 		if (!this.isInitialized) {
 			await this.initialize();
 		}
-		if (this.currentPath) {
+		// Re-detect if the cached path is gone (Roblox moved/uninstalled mid-session) or
+		// was never found. A single native stat is far cheaper than a full re-detection.
+		if (this.currentPath && (await this.pathExists(this.currentPath))) {
 			return this.currentPath;
 		}
 		return this.refreshPath();
+	}
+
+	private async pathExists(p: string): Promise<boolean> {
+		try {
+			await filesystem.getStats(p);
+			return true;
+		} catch {
+			return false;
+		}
 	}
 
 	/**
