@@ -5,8 +5,10 @@ export function getMode(): 'dev' | 'prod' {
 }
 
 export async function isProcessAlive(pid: number | string) {
-	const cmd = await shell('ps', ['-p', pid.toString()], { skipStderrCheck: true });
-	return cmd.stdOut.includes(String(pid));
+	// `kill -0` only probes for the process's existence (no signal sent) and is
+	// far lighter than `ps -p`, which scans the whole process table.
+	const cmd = await shell('kill', ['-0', pid.toString()], { skipStderrCheck: true });
+	return cmd.exitCode === 0;
 }
 
 export async function curlGet(url: string): Promise<any> {

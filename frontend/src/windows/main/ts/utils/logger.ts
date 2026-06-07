@@ -53,6 +53,12 @@ let isInitialized = false;
 let isNeutralinoReady = false;
 let pendingLogs: Array<{ timestamp: string; level: LogLevel; fileName: string; context: string; message: string }> = [];
 
+// Steady-state log lines are buffered and flushed together so gameplay doesn't
+// incur a disk write + backend round-trip per line.
+let logFileQueue: string[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const LOG_FLUSH_INTERVAL = 500;
+
 const SESSION_PID = Math.floor(Math.random() * 10000);
 
 export interface LogEntry {
@@ -422,17 +428,54 @@ async function initializeLogPath(): Promise<void> {
 }
 
 async function writePendingLogs(): Promise<void> {
-	if (!isNeutralinoReady || !logPath || pendingLogs.length === 0) return;
+	if (!isNeutralinoReady || pendingLogs.length === 0) return;
 
 	const logsToWrite = [...pendingLogs];
 	pendingLogs = [];
 
 	for (const log of logsToWrite) {
+		logFileQueue.push(LogFormatter.formatLogLine(log.timestamp, log.level, log.fileName, log.context, log.message) + '\n');
+	}
+	await flushLogs();
+}
+
+function scheduleFlush(): void {
+	if (flushTimer) return;
+	flushTimer = setTimeout(() => {
+		flushTimer = null;
+		flushLogs().catch(() => {});
+	}, LOG_FLUSH_INTERVAL);
+}
+
+/** Writes any buffered log lines to disk in a single append. Safe to call anytime. */
+export async function flushLogs(): Promise<void> {
+	if (flushTimer) {
+		clearTimeout(flushTimer);
+		flushTimer = null;
+	}
+
+	if (!isNeutralinoReady || logFileQueue.length === 0) return;
+
+	if (!isInitialized) {
+		await initializeLogPath();
+	}
+
+	if (!logPath || logFileQueue.length === 0) return;
+
+	// Drain synchronously (no await between read and reset) to avoid races.
+	const batch = logFileQueue.join('');
+	logFileQueue = [];
+
+	try {
+		await filesystem.appendFile(logPath, batch);
+	} catch {
+		// Directory may have been deleted (e.g. after a reset) - try to recreate it once
 		try {
-			const logLine = LogFormatter.formatLogLine(log.timestamp, log.level, log.fileName, log.context, log.message) + '\n';
-			await filesystem.appendFile(logPath, logLine);
-		} catch (error) {
-			console.error('Failed to write pending log to file:', error);
+			const logsDir = path.dirname(logPath);
+			await filesystem.createDirectory(logsDir);
+			await filesystem.appendFile(logPath, batch);
+		} catch {
+			// Silently give up - the data directory may be gone intentionally
 		}
 	}
 }
@@ -449,25 +492,13 @@ async function writeToFile(
 		return;
 	}
 
-	if (!isInitialized) {
-		await initializeLogPath();
-	}
+	logFileQueue.push(LogFormatter.formatLogLine(timestamp, level, fileName, context, message) + '\n');
 
-	if (!logPath) return;
-
-	try {
-		const logLine = LogFormatter.formatLogLine(timestamp, level, fileName, context, message) + '\n';
-		await filesystem.appendFile(logPath, logLine);
-	} catch {
-		// Directory may have been deleted (e.g. after a reset) - try to recreate it once
-		try {
-			const logsDir = path.dirname(logPath);
-			await filesystem.createDirectory(logsDir);
-			const logLine = LogFormatter.formatLogLine(timestamp, level, fileName, context, message) + '\n';
-			await filesystem.appendFile(logPath, logLine);
-		} catch {
-			// Silently give up - the data directory may be gone intentionally
-		}
+	// Flush errors immediately to preserve crash diagnostics; batch everything else.
+	if (level === 'ERROR') {
+		await flushLogs();
+	} else {
+		scheduleFlush();
 	}
 }
 

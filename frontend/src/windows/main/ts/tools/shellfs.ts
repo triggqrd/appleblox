@@ -1,3 +1,4 @@
+import { filesystem } from '@neutralinojs/lib';
 import { shell, type ExecuteOptions } from './shell';
 import Logger from '@/windows/main/ts/utils/logger';
 
@@ -7,7 +8,14 @@ import Logger from '@/windows/main/ts/utils/logger';
  * @param options - Execution options.
  */
 export async function createDirectory(path: string, options: ExecuteOptions = {}): Promise<void> {
-	await shell('mkdir', ['-p', path], options);
+	// Native createDirectory creates parent directories, but throws if the path
+	// already exists - guard with a stats check to preserve `mkdir -p` idempotency.
+	try {
+		await filesystem.getStats(path);
+		return;
+	} catch {
+		await filesystem.createDirectory(path);
+	}
 }
 
 /**
@@ -26,7 +34,7 @@ export async function remove(path: string, options: ExecuteOptions = {}): Promis
  * @param options - Execution options.
  */
 export async function writeFile(path: string, content: string, options: ExecuteOptions = {}): Promise<void> {
-	await shell('bash', ['-c', `echo "${content.replace(/"/g, '\\"')}" > "${path}"`], options);
+	await filesystem.writeFile(path, content);
 }
 
 /**
@@ -68,8 +76,8 @@ export async function merge(source: string, dest: string, options: ExecuteOption
  * @returns The content of the file as a string.
  */
 export async function readFile(path: string, options: ExecuteOptions = {}): Promise<string> {
-	const result = await shell('cat', [path], options);
-	return result.stdOut.trim();
+	const content = await filesystem.readFile(path);
+	return content.trim();
 }
 
 /**
@@ -91,7 +99,7 @@ export async function listDirectory(path: string, options: ExecuteOptions = {}):
  */
 export async function exists(path: string, options: ExecuteOptions = {}): Promise<boolean> {
 	try {
-		await shell('test', ['-e', path], { ...options });
+		await filesystem.getStats(path);
 		return true;
 	} catch (error) {
 		return false;

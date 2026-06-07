@@ -13,7 +13,7 @@ import { RPCController } from './ts/tools/rpc';
 import { shell } from './ts/tools/shell';
 import { getMode, sleep } from './ts/utils';
 import { logDebugInfo } from './ts/utils/debug';
-import Logger, { initializeLogger } from '@/windows/main/ts/utils/logger';
+import Logger, { initializeLogger, flushLogs } from '@/windows/main/ts/utils/logger';
 import { ensureDataDirs, initializeDataDirectory } from './ts/utils/paths';
 import { migrateFromSingleAccount } from './ts/roblox/accounts';
 import { focusWindow, setWindowVisibility } from './ts/window';
@@ -65,7 +65,7 @@ async function pollBootstrapCommands() {
 		}
 	} catch (error) {}
 
-	setTimeout(pollBootstrapCommands, 100);
+	setTimeout(pollBootstrapCommands, 500);
 }
 
 // Initialize NeutralinoJS
@@ -95,6 +95,13 @@ async function quit() {
 		Logger.warn('Error stopping RPC controller:', e);
 	}
 
+	// Flush any buffered log lines before the process exits.
+	try {
+		await flushLogs();
+	} catch (e) {
+		console.error('Failed to flush logs on quit:', e);
+	}
+
 	try {
 		await shell('pkill', ['-f', '_ablox'], { skipStderrCheck: true });
 	} catch (e) {
@@ -122,7 +129,7 @@ events.on('ready', async () => {
 	setTimeout(initializeLogger, 0);
 
 	// Start polling for bootstrap commands
-	setTimeout(pollBootstrapCommands, 100);
+	setTimeout(pollBootstrapCommands, 500);
 
 	// Extract bundled icons (non-blocking)
 	setTimeout(async () => {

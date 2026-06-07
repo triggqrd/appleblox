@@ -11,11 +11,18 @@ let rpcOptions: RPCOptions = {
 
 type GameMessage = string | { data: RichPresence; command: 'SetRichPresence' };
 
+// Thumbnail URLs for an assetId are stable for a session, so memoize them to
+// avoid re-fetching the same image on every rich-presence update.
+const thumbnailCache = new Map<number, string>();
+
 async function fetchThumbnail(assetId: number): Promise<string | null> {
 	if (!assetId || assetId <= 0) {
 		Logger.error(`Invalid assetId: ${assetId}`);
 		return null;
 	}
+
+	const cached = thumbnailCache.get(assetId);
+	if (cached) return cached;
 
 	try {
 		const url = `https://thumbnails.roblox.com/v1/assets?assetIds=${assetId}&returnPolicy=PlaceHolder&size=30x30&format=png&isCircular=false`;
@@ -40,7 +47,9 @@ async function fetchThumbnail(assetId: number): Promise<string | null> {
 			return null;
 		}
 
-		return thumbnail.imageUrl.replace('30/30', '1024/1024');
+		const imageUrl = thumbnail.imageUrl.replace('30/30', '1024/1024');
+		thumbnailCache.set(assetId, imageUrl);
+		return imageUrl;
 	} catch (err) {
 		Logger.error('Failed to fetch thumbnail:', err);
 		return null;
