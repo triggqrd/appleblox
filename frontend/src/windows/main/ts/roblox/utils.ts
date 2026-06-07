@@ -11,8 +11,9 @@ import Logger from '@/windows/main/ts/utils/logger';
 export class RobloxUtils {
 	/** Checks if roblox is installed, and if not show a popup */
 	static async hasRoblox(): Promise<boolean> {
-		const robloxPath = await PathManager.getPathEnsured();
-		return robloxPath !== null && (await shellFS.exists(robloxPath));
+		// getPathEnsured() already verifies the cached path still exists (re-detecting
+		// otherwise), so a non-null result means Roblox is present.
+		return (await PathManager.getPathEnsured()) !== null;
 	}
 
 	/** Uses cli to check if any instance of roblox is open */
