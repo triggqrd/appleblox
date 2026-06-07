@@ -1,5 +1,5 @@
 import { filesystem } from '@neutralinojs/lib';
-import { shell, type ExecuteOptions } from './shell';
+import { shell, escapeShellArg, type ExecuteOptions } from './shell';
 import Logger from '@/windows/main/ts/utils/logger';
 
 /**
@@ -8,14 +8,10 @@ import Logger from '@/windows/main/ts/utils/logger';
  * @param options - Execution options.
  */
 export async function createDirectory(path: string, options: ExecuteOptions = {}): Promise<void> {
-	// Native createDirectory creates parent directories, but throws if the path
-	// already exists - guard with a stats check to preserve `mkdir -p` idempotency.
-	try {
-		await filesystem.getStats(path);
-		return;
-	} catch {
-		await filesystem.createDirectory(path);
-	}
+	// Must use the shell (`mkdir -p`): the native filesystem.createDirectory is
+	// rejected by macOS when the target is inside another app's bundle (e.g.
+	// Roblox.app/Contents/MacOS/ClientSettings), which a spawned shell is not.
+	await shell('mkdir', ['-p', path], options);
 }
 
 /**
@@ -34,7 +30,11 @@ export async function remove(path: string, options: ExecuteOptions = {}): Promis
  * @param options - Execution options.
  */
 export async function writeFile(path: string, content: string, options: ExecuteOptions = {}): Promise<void> {
-	await filesystem.writeFile(path, content);
+	// Must use the shell: native filesystem writes are rejected by macOS when the
+	// target is inside another app's bundle (e.g. Roblox.app). `printf '%s'` with
+	// fully single-quote-escaped args avoids the old injection bug (backticks/$()/\
+	// in content can no longer break out or trigger shell command substitution).
+	await shell('bash', ['-c', `printf '%s' ${escapeShellArg(content)} > ${escapeShellArg(path)}`], options);
 }
 
 /**
