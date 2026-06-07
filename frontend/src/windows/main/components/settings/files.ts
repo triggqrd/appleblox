@@ -10,26 +10,23 @@ export async function getConfigPath(): Promise<string> {
 
 /** Saves the data provided to the Application Support folder */
 const saveQueue: { [key: string]: string } = {};
-let hasInterval = false;
-let saveInterval: NodeJS.Timeout | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Initialize save interval once
-function initSaveInterval() {
-	if (!hasInterval) {
-		hasInterval = true;
-		saveInterval = setInterval(() => {
-			for (const [path, data] of Object.entries(saveQueue)) {
-				filesystem.writeFile(path, data).catch((err) => {
-					Logger.error(err);
-				});
-				delete saveQueue[path];
-			}
-		}, 1000);
+// Flush the queued writes to disk. Self-canceling: no timer runs while idle.
+function flushSaveQueue() {
+	saveTimer = null;
+	for (const [path, data] of Object.entries(saveQueue)) {
+		filesystem.writeFile(path, data).catch((err) => {
+			Logger.error(err);
+		});
+		delete saveQueue[path];
 	}
 }
 
-// Initialize on module load
-initSaveInterval();
+function scheduleSaveFlush() {
+	if (saveTimer) return;
+	saveTimer = setTimeout(flushSaveQueue, 1000);
+}
 
 // Keeps track of the debounces
 const lastSaveTime = new Map<string, number>();
@@ -53,6 +50,7 @@ export async function saveSettings(panelId: string, data: Object): Promise<void>
 		}
 		try {
 			saveQueue[`${savePath}/${panelId}.json`] = JSON.stringify(data);
+			scheduleSaveFlush();
 		} catch (err) {
 			Logger.error(err);
 		}
@@ -284,10 +282,9 @@ export async function getValue<T>(
 
 /** Clean up resources */
 export function cleanup(): void {
-	if (saveInterval) {
-		clearInterval(saveInterval);
-		saveInterval = null;
-		hasInterval = false;
+	if (saveTimer) {
+		clearTimeout(saveTimer);
+		saveTimer = null;
 	}
 
 	// Clear all locks and cache

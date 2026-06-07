@@ -1,4 +1,5 @@
-import { shell, type ExecuteOptions } from './shell';
+import { filesystem } from '@neutralinojs/lib';
+import { shell, escapeShellArg, type ExecuteOptions } from './shell';
 import Logger from '@/windows/main/ts/utils/logger';
 
 /**
@@ -7,6 +8,9 @@ import Logger from '@/windows/main/ts/utils/logger';
  * @param options - Execution options.
  */
 export async function createDirectory(path: string, options: ExecuteOptions = {}): Promise<void> {
+	// Must use the shell (`mkdir -p`): the native filesystem.createDirectory is
+	// rejected by macOS when the target is inside another app's bundle (e.g.
+	// Roblox.app/Contents/MacOS/ClientSettings), which a spawned shell is not.
 	await shell('mkdir', ['-p', path], options);
 }
 
@@ -26,7 +30,11 @@ export async function remove(path: string, options: ExecuteOptions = {}): Promis
  * @param options - Execution options.
  */
 export async function writeFile(path: string, content: string, options: ExecuteOptions = {}): Promise<void> {
-	await shell('bash', ['-c', `echo "${content.replace(/"/g, '\\"')}" > "${path}"`], options);
+	// Must use the shell: native filesystem writes are rejected by macOS when the
+	// target is inside another app's bundle (e.g. Roblox.app). `printf '%s'` with
+	// fully single-quote-escaped args avoids the old injection bug (backticks/$()/\
+	// in content can no longer break out or trigger shell command substitution).
+	await shell('bash', ['-c', `printf '%s' ${escapeShellArg(content)} > ${escapeShellArg(path)}`], options);
 }
 
 /**
@@ -68,8 +76,8 @@ export async function merge(source: string, dest: string, options: ExecuteOption
  * @returns The content of the file as a string.
  */
 export async function readFile(path: string, options: ExecuteOptions = {}): Promise<string> {
-	const result = await shell('cat', [path], options);
-	return result.stdOut.trim();
+	const content = await filesystem.readFile(path);
+	return content.trim();
 }
 
 /**
@@ -91,7 +99,7 @@ export async function listDirectory(path: string, options: ExecuteOptions = {}):
  */
 export async function exists(path: string, options: ExecuteOptions = {}): Promise<boolean> {
 	try {
-		await shell('test', ['-e', path], { ...options });
+		await filesystem.getStats(path);
 		return true;
 	} catch (error) {
 		return false;

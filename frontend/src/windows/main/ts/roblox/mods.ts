@@ -64,14 +64,16 @@ export class RobloxMods {
 		}
 
 		// Remove mesh files, as they are used by mods going against the Roblox TOS
-		for (const mod of mods) {
-			const files = await filesystem.readDirectory(mod.path, { recursive: true });
-			for (const file of files) {
-				if (path.extname(file.entry).endsWith('mesh')) {
-					await filesystem.remove(path.join(mod.path, file.entry));
-				}
-			}
-		}
+		await Promise.all(
+			mods.map(async (mod) => {
+				const files = await filesystem.readDirectory(mod.path, { recursive: true });
+				await Promise.all(
+					files
+						.filter((file) => path.extname(file.entry).endsWith('mesh'))
+						.map((file) => filesystem.remove(path.join(mod.path, file.entry)))
+				);
+			})
+		);
 
 		await this.createBackup();
 		const resourcesFolder = path.join(robloxPath, 'Contents/Resources/');
@@ -148,20 +150,35 @@ export class RobloxMods {
 			await shellFS.copy(fontFamiliesPath, fontsCacheDir, true);
 		}
 
-		// Apply to every files
+		// Apply to every font-family file in parallel.
+		const targetAssetId = `rbxasset://fonts/CustomFont${fontExt}`;
 		const entries = await filesystem.readDirectory(fontFamiliesPath);
-		for (const file of entries) {
-			try {
-				const content = await filesystem.readFile(file.path);
-				const jsonContent = JSON.parse(content);
-				for (const [key] of Object.keys(jsonContent.faces)) {
-					jsonContent.faces[key].assetId = `rbxasset://fonts/CustomFont${fontExt}`;
+		await Promise.all(
+			entries.map(async (file) => {
+				try {
+					const content = await filesystem.readFile(file.path);
+					const jsonContent = JSON.parse(content);
+					if (!Array.isArray(jsonContent.faces)) return;
+
+					let changed = false;
+					for (const face of jsonContent.faces) {
+						if (face.assetId !== targetAssetId) {
+							face.assetId = targetAssetId;
+							changed = true;
+						}
+					}
+
+					// Skip rewriting files that are already pointing at the custom font.
+					// Write via shellFS: these JSONs live in Roblox.app's bundle, where
+					// native filesystem writes are blocked by macOS.
+					if (changed) {
+						await shellFS.writeFile(file.path, JSON.stringify(jsonContent));
+					}
+				} catch (err) {
+					logger.error(`Error when applying custom font to: "${file.path}"`);
 				}
-				await filesystem.writeFile(file.path, JSON.stringify(jsonContent));
-			} catch (err) {
-				logger.error(`Error when applying custom font to: "${file.path}"`);
-			}
-		}
+			})
+		);
 
 		logger.info('Added custom font');
 	}

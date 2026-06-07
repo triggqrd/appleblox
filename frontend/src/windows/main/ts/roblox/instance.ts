@@ -74,26 +74,30 @@ interface Pattern {
 	regex: RegExp;
 }
 
+// NOTE: these regexes intentionally omit the /g flag. With /g, RegExp.test()
+// advances and persists lastIndex on the shared regex object, making it stateful
+// across lines and silently skipping matches. Without /g, .test() is stateless
+// and .match() still returns match[0] (the full match), so emitted data is unchanged.
 const Patterns: Pattern[] = [
 	{
 		event: 'GameJoiningEntry',
-		regex: /! Joining game '([0-9a-f\-]{36})' place ([0-9]+) at ([0-9\.]+)/g,
+		regex: /! Joining game '([0-9a-f\-]{36})' place ([0-9]+) at ([0-9\.]+)/,
 	},
 	{
 		event: 'GameJoiningUDMUX',
-		regex: /UDMUX Address = ([0-9\.]+), Port = [0-9]+ \| RCC Server Address = ([0-9\.]+), Port = [0-9]+/g,
+		regex: /UDMUX Address = ([0-9\.]+), Port = [0-9]+ \| RCC Server Address = ([0-9\.]+), Port = [0-9]+/,
 	},
 	{
 		event: 'GameJoinedEntry',
-		regex: /serverId: ([0-9\.]+)\|[0-9]+/g,
+		regex: /serverId: ([0-9\.]+)\|[0-9]+/,
 	},
 	{
 		event: 'GameMessageEntry',
-		regex: /\[BloxstrapRPC\] (.*)/g,
+		regex: /\[BloxstrapRPC\] (.*)/,
 	},
 	{
 		event: 'GameCrashEntry',
-		regex: /\[FLog::CrashReportLog\] (.*)/g,
+		regex: /\[FLog::CrashReportLog\] (.*)/,
 	},
 ];
 
@@ -108,17 +112,16 @@ export class RobloxInstance {
 	private logsDirectory: string | null = null;
 	private watchHandler: (evt: any) => void = () => {};
 	private pollInterval: NodeJS.Timeout | null = null;
-	private lastPollTime = 0;
 
-	// Non-blocking 60fps configuration
-	private readonly POLL_INTERVAL = 16.67; // 60fps (16.67ms)
-	private readonly BATCH_SIZE = 32 * 1024; // 32KB max read per frame
+	// The directory watcher is the primary trigger for reading new log content; a
+	// slow interval acts only as a safety net in case the watcher misses an event.
+	private readonly SAFETY_POLL_INTERVAL = 1000;
+	private readonly BATCH_SIZE = 32 * 1024; // 32KB max read per pass
 	private readonly PROCESSING_QUEUE_SIZE = 10; // Max queued processing tasks
 
-	// Performance monitoring
-	private pollCount = 0;
-	private lastPerformanceLog = 0;
-	private readonly PERFORMANCE_LOG_INTERVAL = 5000; // Log performance stats every 5 seconds
+	// Reentrancy guard so the watcher and the safety poll can't read concurrently
+	// and race on lastPosition / lastFileSize.
+	private isReading = false;
 
 	// Non-blocking processing queue
 	private processingQueue: string[][] = [];
@@ -200,10 +203,15 @@ export class RobloxInstance {
 		}
 
 		const robloxProcess = (await shell('pgrep', ['-f', 'Roblox'])).stdOut.trim().split('\n');
-		for (const pid of robloxProcess) {
-			const info = (
-				await shell(`ps -p ${pid} -o command=`, [], { completeCommand: true, skipStderrCheck: true })
-			).stdOut.trim();
+		const processInfos = await Promise.all(
+			robloxProcess.map(async (pid) => ({
+				pid,
+				info: (
+					await shell(`ps -p ${pid} -o command=`, [], { completeCommand: true, skipStderrCheck: true })
+				).stdOut.trim(),
+			}))
+		);
+		for (const { pid, info } of processInfos) {
 			if (info.length < 2) continue;
 			const processFileName = path.basename(info);
 			if (processFileName.includes('RobloxPlayer')) {
@@ -246,55 +254,45 @@ export class RobloxInstance {
 				Logger.info('Instance is null, stopping.');
 				clearInterval(intervalId);
 			}
-		}, 500);
+		}, 1000);
 	}
 
 	private async checkForNewContent() {
-		if (!this.isWatching || !this.latestLogPath) return;
+		if (!this.isWatching || !this.latestLogPath || this.isReading) return;
 
+		// Capture the path so a concurrent cleanup() (which nulls latestLogPath on
+		// exit) can't turn it into null mid-read.
+		const logPath = this.latestLogPath;
+
+		this.isReading = true;
 		try {
-			const currentTime = performance.now();
+			// Get file stats (fast operation)
+			const stats = await filesystem.getStats(logPath);
+			this.lastFileSize = stats.size;
 
-			// Log performance stats every 5 seconds
-			if (currentTime - this.lastPerformanceLog >= this.PERFORMANCE_LOG_INTERVAL) {
-				const pollRate = this.pollCount / (this.PERFORMANCE_LOG_INTERVAL / 1000);
-				Logger.debug(`Poll rate: ${pollRate.toFixed(1)}Hz, Queue size: ${this.processingQueue.length}`);
-				this.pollCount = 0;
-				this.lastPerformanceLog = currentTime;
-			}
+			// Drain all new content in batch-sized chunks so a large burst is fully
+			// caught up within a single invocation (the watcher may fire only once).
+			while (this.isWatching && stats.size > this.lastPosition) {
+				const availableBytes = stats.size - this.lastPosition;
+				const readSize = Math.min(availableBytes, this.BATCH_SIZE);
 
-			// Only proceed if enough time has passed since last poll (60fps)
-			if (currentTime - this.lastPollTime >= this.POLL_INTERVAL) {
-				this.pollCount++;
-				this.lastPollTime = currentTime;
+				const content = await filesystem.readFile(logPath, {
+					pos: this.lastPosition,
+					size: readSize,
+				});
 
-				// Get file stats (fast operation)
-				const stats = await filesystem.getStats(this.latestLogPath);
+				this.lastPosition += readSize;
 
-				// Check if file has new content
-				if (stats.size > this.lastPosition) {
-					// Calculate read size (limit to batch size for non-blocking behavior)
-					const availableBytes = stats.size - this.lastPosition;
-					const readSize = Math.min(availableBytes, this.BATCH_SIZE);
-
-					// Read only the new content (limited batch size)
-					const content = await filesystem.readFile(this.latestLogPath, {
-						pos: this.lastPosition,
-						size: readSize,
-					});
-
-					this.lastPosition += readSize;
-					this.lastFileSize = stats.size;
-
-					// Queue processing asynchronously (non-blocking)
-					if (content.length > 0) {
-						const lines = content.split('\n');
-						this.queueProcessing(lines);
-					}
+				// Queue processing asynchronously (non-blocking)
+				if (content.length > 0) {
+					const lines = content.split('\n');
+					this.queueProcessing(lines);
 				}
 			}
 		} catch (err) {
 			Logger.error('Error checking log file:', err);
+		} finally {
+			this.isReading = false;
 		}
 	}
 
@@ -402,19 +400,7 @@ export class RobloxInstance {
 			this.lastFileSize = 0;
 		}
 
-		// Initialize performance monitoring
-		this.pollCount = 0;
-		this.lastPerformanceLog = performance.now();
-		this.lastPollTime = performance.now();
-
-		// Set up 60fps polling interval
-		this.pollInterval = setInterval(() => {
-			this.checkForNewContent().catch((err) => {
-				Logger.error('Error in poll interval:', err);
-			});
-		}, this.POLL_INTERVAL);
-
-		// Set up directory watcher as backup
+		// Set up the directory watcher as the primary, event-driven trigger.
 		this.watcherId = await filesystem.createWatcher(this.logsDirectory);
 		Logger.info(`Created directory watcher with ID: ${this.watcherId}`);
 
@@ -432,44 +418,28 @@ export class RobloxInstance {
 
 		events.off('watchFile', this.watchHandler);
 		events.on('watchFile', this.watchHandler);
+
+		// Slow safety-net poll: only catches content the watcher might have missed.
+		this.pollInterval = setInterval(() => {
+			this.checkForNewContent().catch((err) => {
+				Logger.error('Error in safety poll:', err);
+			});
+		}, this.SAFETY_POLL_INTERVAL);
 	}
 
 	private processLines(lines: string[]) {
 		try {
-			// Process high-frequency events first (GameMessageEntry)
-			const messageLines = lines.filter((line) => {
-				const pattern = Patterns.find((p) => p.event === 'GameMessageEntry');
-				return pattern?.regex.test(line);
-			});
-
-			for (const line of messageLines) {
-				const pattern = Patterns.find((p) => p.event === 'GameMessageEntry');
-				if (pattern) {
-					const match = line.match(pattern.regex);
-					if (match) {
-						this.emit('gameEvent', {
-							event: 'GameMessageEntry',
-							data: match[0],
-						});
+			// Single pass over the batch: each line is checked against every string
+			// Entry and every regex Pattern, emitting the same events (and same data
+			// shape) the previous multi-pass version did, in log order.
+			for (const line of lines) {
+				for (const entry of Entries) {
+					if (line.includes(entry.match)) {
+						this.emit('gameEvent', { event: entry.event, data: line });
 					}
 				}
-			}
 
-			// Process other events
-			for (const entry of Entries) {
-				const includedLines = lines.filter((line) => line.includes(entry.match));
-				for (const line of includedLines) {
-					this.emit('gameEvent', { event: entry.event, data: line });
-				}
-			}
-
-			// Process remaining pattern matches
-			for (const pattern of Patterns) {
-				// Skip GameMessageEntry as it's already processed
-				if (pattern.event === 'GameMessageEntry') continue;
-
-				const matchedLines = lines.filter((line) => pattern.regex.test(line));
-				for (const line of matchedLines) {
+				for (const pattern of Patterns) {
 					const match = line.match(pattern.regex);
 					if (match) {
 						this.emit('gameEvent', { event: pattern.event, data: match[0] });
@@ -495,6 +465,7 @@ export class RobloxInstance {
 		// Clear processing queue
 		this.processingQueue = [];
 		this.isProcessing = false;
+		this.isReading = false;
 
 		if (this.watcherId) {
 			try {
@@ -509,9 +480,6 @@ export class RobloxInstance {
 		this.latestLogPath = null;
 		this.lastPosition = 0;
 		this.lastFileSize = 0;
-		this.lastPollTime = 0;
-		this.pollCount = 0;
-		this.lastPerformanceLog = 0;
 		this.logsDirectory = null;
 	}
 
