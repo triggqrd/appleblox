@@ -260,19 +260,23 @@ export class RobloxInstance {
 	private async checkForNewContent() {
 		if (!this.isWatching || !this.latestLogPath || this.isReading) return;
 
+		// Capture the path so a concurrent cleanup() (which nulls latestLogPath on
+		// exit) can't turn it into null mid-read.
+		const logPath = this.latestLogPath;
+
 		this.isReading = true;
 		try {
 			// Get file stats (fast operation)
-			const stats = await filesystem.getStats(this.latestLogPath);
+			const stats = await filesystem.getStats(logPath);
 			this.lastFileSize = stats.size;
 
 			// Drain all new content in batch-sized chunks so a large burst is fully
 			// caught up within a single invocation (the watcher may fire only once).
-			while (stats.size > this.lastPosition) {
+			while (this.isWatching && stats.size > this.lastPosition) {
 				const availableBytes = stats.size - this.lastPosition;
 				const readSize = Math.min(availableBytes, this.BATCH_SIZE);
 
-				const content = await filesystem.readFile(this.latestLogPath, {
+				const content = await filesystem.readFile(logPath, {
 					pos: this.lastPosition,
 					size: readSize,
 				});
