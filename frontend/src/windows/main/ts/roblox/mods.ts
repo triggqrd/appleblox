@@ -169,8 +169,10 @@ export class RobloxMods {
 					}
 
 					// Skip rewriting files that are already pointing at the custom font.
+					// Write via shellFS: these JSONs live in Roblox.app's bundle, where
+					// native filesystem writes are blocked by macOS.
 					if (changed) {
-						await filesystem.writeFile(file.path, JSON.stringify(jsonContent));
+						await shellFS.writeFile(file.path, JSON.stringify(jsonContent));
 					}
 				} catch (err) {
 					logger.error(`Error when applying custom font to: "${file.path}"`);

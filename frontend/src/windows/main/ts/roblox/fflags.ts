@@ -220,11 +220,13 @@ export class RobloxFFlags {
 		}
 		const filePath = path.join(robloxPath, 'Contents/MacOS/ClientSettings/ClientAppSettings.json');
 
+		// Writes target Roblox.app's bundle; native filesystem calls are blocked there
+		// by macOS, so go through shellFS (shell-backed) for remove/create/write.
 		if (await shellFS.exists(filePath)) {
-			await filesystem.remove(filePath);
+			await shellFS.remove(filePath);
 		}
 
-		await filesystem.createDirectory(path.dirname(filePath));
+		await shellFS.createDirectory(path.dirname(filePath));
 
 		const [presetFlags, customFlags] = await Promise.all([RobloxFFlags.parseFlags(true), RobloxFFlags.parseFlags(false)]);
 
@@ -233,7 +235,7 @@ export class RobloxFFlags {
 			...customFlags.validFlags,
 		};
 
-		await filesystem.writeFile(filePath, JSON.stringify(fflags));
+		await shellFS.writeFile(filePath, JSON.stringify(fflags));
 		toast.success(`Wrote ClientAppSettings at "${filePath}"`);
 	}
 
