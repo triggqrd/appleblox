@@ -5,17 +5,14 @@ import path from 'path-browserify';
 import { toast } from 'svelte-sonner';
 import { shell } from '../tools/shell';
 import shellFS from '../tools/shellfs';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 import Logger from '@/windows/main/ts/utils/logger';
 
 export class RobloxUtils {
 	/** Checks if roblox is installed, and if not show a popup */
 	static async hasRoblox(): Promise<boolean> {
-		const robloxPath = await detectRobloxPath();
-		if (robloxPath && (await shellFS.exists(robloxPath))) {
-			return true;
-		}
-		return false;
+		const robloxPath = await PathManager.getPathEnsured();
+		return robloxPath !== null && (await shellFS.exists(robloxPath));
 	}
 
 	/** Uses cli to check if any instance of roblox is open */
@@ -38,7 +35,7 @@ export class RobloxUtils {
 
 			toast.info('Opening Roblox...', { duration: 1000 });
 			Logger.info('Opening Roblox...');
-			const robloxPath = await detectRobloxPath();
+			const robloxPath = await PathManager.getPathEnsured();
 			if (!robloxPath) {
 				throw new Error('Roblox installation not found.');
 			}

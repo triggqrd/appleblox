@@ -1,3 +1,4 @@
+import { filesystem } from '@neutralinojs/lib';
 import { shell } from '../tools/shell';
 import { exists as pathExists } from '../tools/shellfs';
 import Logger from '@/windows/main/ts/utils/logger';
@@ -128,9 +129,10 @@ export async function validateRobloxPath(robloxPath: string | null): Promise<boo
 			return false;
 		}
 
-		// Read plist and verify it's actually Roblox
-		const plistResult = await shell('plutil', ['-p', plistPath], { skipStderrCheck: true });
-		const plistContent = plistResult.stdOut;
+		// Read plist and verify it's actually Roblox. Read natively instead of shelling
+		// out to `plutil -p`: Info.plist is XML text containing the bundle id as readable
+		// text, so a substring check is enough and avoids a subprocess on every validation.
+		const plistContent = await filesystem.readFile(plistPath);
 
 		// Check for Roblox bundle identifier
 		if (!plistContent.includes('com.roblox')) {

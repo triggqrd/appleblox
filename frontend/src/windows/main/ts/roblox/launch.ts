@@ -15,7 +15,7 @@ import onGameEvent from './events';
 import { RobloxFFlags } from './fflags';
 import { RobloxInstance } from './instance';
 import { RobloxMods } from './mods';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 import { RobloxUtils } from './utils';
 import {
 	isRegionSelectionAvailable,
@@ -209,9 +209,7 @@ async function setupBootstrapper(): Promise<void> {
 		const w = window as any;
 		const nlPath: string = window.NL_PATH ?? '';
 		const isDev = getMode() === 'dev';
-		const binaryPath = isDev
-			? path.join(nlPath, 'bin', 'neutralino-mac_universal')
-			: path.join(nlPath, '../MacOS/main');
+		const binaryPath = isDev ? path.join(nlPath, 'bin', 'neutralino-mac_universal') : path.join(nlPath, '../MacOS/main');
 
 		// Build URL — include parent's NL_TOKEN/NL_PORT so the child frontend connects to
 		// the parent Neutralino backend (required for events.broadcast to reach the parent).
@@ -588,7 +586,7 @@ export async function launchRoblox(
 			return;
 		}
 
-		const robloxPath = await detectRobloxPath();
+		const robloxPath = await PathManager.getPathEnsured();
 		if (!robloxPath) {
 			throw new Error('Roblox installation not found. Cannot launch Roblox.');
 		}
@@ -600,7 +598,6 @@ export async function launchRoblox(
 		// Inject the active account's cookie into Roblox's binary cookies file
 		// so Roblox launches as the correct account
 		await updateBootstrapper('bootstrapper:text', { text: 'Setting up account...' });
-		
 
 		try {
 			const robloxInstance = await applyModsAndLaunch(settings, finalUrl);

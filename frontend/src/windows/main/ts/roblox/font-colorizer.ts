@@ -4,7 +4,7 @@ import path from 'path-browserify';
 import shellFS from '../tools/shellfs';
 import Logger from '../utils/logger';
 import { getCacheDir } from '../utils/paths';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 
 const logger = Logger.withContext('FontColorizer');
 
@@ -387,8 +387,8 @@ export async function generateIconColorCache(hexColor: string): Promise<void> {
 	const color = hexToRgb(hexColor);
 	logger.info(`Generating icon color cache with color: ${hexColor}`);
 
-	// Detect Roblox installation
-	const robloxPath = await detectRobloxPath();
+	// Resolve Roblox installation (cached)
+	const robloxPath = await PathManager.getPathEnsured();
 	if (!robloxPath) {
 		throw new Error('Roblox installation not found. Please install Roblox first.');
 	}

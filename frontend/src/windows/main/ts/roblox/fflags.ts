@@ -4,7 +4,7 @@ import { toast } from 'svelte-sonner';
 import { getAllProfiles, getSelectedProfile, writeProfile, type Profile } from '../../components/flag-editor';
 import { getConfigPath } from '../../components/settings';
 import shellFS from '../tools/shellfs';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 import Logger from '@/windows/main/ts/utils/logger';
 import { getValue, loadSettings } from '../../components/settings';
 
@@ -214,7 +214,7 @@ export class RobloxFFlags {
 
 	static async writeClientAppSettings() {
 		Logger.info('Writing ClientAppSettings...');
-		const robloxPath = await detectRobloxPath();
+		const robloxPath = await PathManager.getPathEnsured();
 		if (!robloxPath) {
 			throw new Error('Roblox installation not found. Cannot write ClientAppSettings.');
 		}
