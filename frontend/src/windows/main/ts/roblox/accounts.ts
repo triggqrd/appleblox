@@ -5,7 +5,6 @@ import { parseBinaryCookies, extractRoblosecurity, buildRoblosecurityFile } from
 import { authenticatedRequest, getCsrfToken, validateArbitraryCookie, type UserInfo } from './api';
 import Logger from '@/windows/main/ts/utils/logger';
 import { Curl } from '../tools/curl';
-import { detectRobloxPath } from './path';
 import { shell, spawn } from '../tools/shell';
 import { getValue } from '../../components/settings';
 import { RobloxDelegate } from './delegate';

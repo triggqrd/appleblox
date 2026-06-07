@@ -96,6 +96,23 @@ class RobloxPathManager {
 	}
 
 	/**
+	 * Async, init-safe accessor for the current Roblox path. Returns the cached path
+	 * (initializing once if needed) without re-running detection. Only when no path is
+	 * cached does it re-detect, so a Roblox installed after startup is still found.
+	 * Use this instead of calling detectRobloxPath() directly from feature code.
+	 * @returns The path to Roblox.app, or null if not found
+	 */
+	async getPathEnsured(): Promise<string | null> {
+		if (!this.isInitialized) {
+			await this.initialize();
+		}
+		if (this.currentPath) {
+			return this.currentPath;
+		}
+		return this.refreshPath();
+	}
+
+	/**
 	 * Re-runs Roblox detection and updates the current path.
 	 * Useful when user clicks "Re-detect" button or when cached path becomes invalid.
 	 * @returns The newly detected path, or null if not found

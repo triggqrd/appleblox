@@ -8,7 +8,7 @@ import { shell } from '../tools/shell';
 import shellFS from '../tools/shellfs';
 import Logger from '../utils/logger';
 import { getDataDir, getModsDir, getModsCacheDir, getFontsCacheDir, getCacheDir } from '../utils/paths';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 import { getIconColorCacheDir, iconColorCacheExists } from './font-colorizer';
 
 const logger = Logger.withContext('Mods');
@@ -254,7 +254,7 @@ export class RobloxMods {
 	 */
 	static async toggleHighRes(state: boolean) {
 		// Get the path to Roblox's Info.plist file
-		const robloxPath = await detectRobloxPath();
+		const robloxPath = await PathManager.getPathEnsured();
 		if (!robloxPath) {
 			throw new Error('Roblox installation not found. Cannot toggle high resolution.');
 		}

@@ -1,6 +1,6 @@
 import path from 'path-browserify';
 import shellFS from '../tools/shellfs';
-import { detectRobloxPath } from './path';
+import { PathManager } from './path-manager';
 import Logger from '@/windows/main/ts/utils/logger';
 
 export let version: string | null = null;
@@ -20,7 +20,7 @@ function extractVersion(plistString: string): string | null {
 
 async function loadVersion() {
 	if (version) return;
-	const robloxPath = await detectRobloxPath();
+	const robloxPath = await PathManager.getPathEnsured();
 	if (!robloxPath) {
 		Logger.warn('Roblox installation not found. Cannot load version.');
 		return;
